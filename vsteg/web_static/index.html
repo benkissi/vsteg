@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>vsteg — hide secrets in video</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+  <div id="busy" class="busy" hidden aria-hidden="true">
+    <div class="busy-card" role="status" aria-live="polite">
+      <div class="busy-spinner" aria-hidden="true"></div>
+      <p id="busy-label" class="busy-label">Working…</p>
+      <p class="busy-hint">This can take a minute for longer videos.</p>
+    </div>
+  </div>
+
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand-row">
+        <div class="brand-mark">
+          <span class="logo">vsteg</span>
+          <span class="brand-pill">studio</span>
+        </div>
+        <nav class="modes" role="tablist" aria-label="Choose a task">
+          <button class="mode is-active" data-mode="hide" role="tab" aria-selected="true">Hide</button>
+          <button class="mode" data-mode="reveal" role="tab" aria-selected="false">Reveal</button>
+          <button class="mode" data-mode="check" role="tab" aria-selected="false">Check</button>
+          <button class="mode" data-mode="compare" role="tab" aria-selected="false">Compare</button>
+        </nav>
+      </div>
+      <p class="lede">Hide a file inside a video — or reveal and inspect one. No command line needed.</p>
+    </header>
+
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+
+    <!-- HIDE -->
+    <section class="panel is-active" id="panel-hide" role="tabpanel">
+      <div class="panel-card">
+        <div class="panel-card-head">
+          <h2>Hide</h2>
+          <p>Embed a secret into a cover video, then download the result.</p>
+        </div>
+        <form id="form-hide" class="flow form-grid">
+          <div class="field">
+            <span class="label">Cover video</span>
+            <label class="dropzone" data-dropzone>
+              <input type="file" name="carrier" accept="video/*" required hidden />
+              <span class="dropzone-icon" aria-hidden="true"></span>
+              <span class="dropzone-title">Drop video here</span>
+              <span class="dropzone-hint">or click to browse · MP4, MOV, MKV…</span>
+              <span class="dropzone-file" hidden></span>
+            </label>
+          </div>
+          <div class="field">
+            <span class="label">Secret file</span>
+            <label class="dropzone" data-dropzone>
+              <input type="file" name="secret" required hidden />
+              <span class="dropzone-icon dropzone-icon-file" aria-hidden="true"></span>
+              <span class="dropzone-title">Drop secret here</span>
+              <span class="dropzone-hint">or click to browse · any file type</span>
+              <span class="dropzone-file" hidden></span>
+            </label>
+          </div>
+          <label class="field">
+            <span class="label">How should it hide?</span>
+            <select name="method">
+              <option value="append" selected>Simple &amp; reliable (recommended)</option>
+              <option value="lsb">Hidden in frame pixels (larger .mkv file)</option>
+              <option value="dct">Survives re-compression (small secrets only)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="label">Password <em>required if using a decoy</em></span>
+            <input type="password" name="password" placeholder="Leave blank for none" autocomplete="new-password" />
+          </label>
+          <details class="decoy-box">
+            <summary>Optional decoy (plausible deniability)</summary>
+            <p class="decoy-help">
+              Hide a second harmless file. Reveal with the decoy password to get the decoy;
+              use the real password for the real secret.
+            </p>
+            <div class="field">
+              <span class="label">Decoy file</span>
+              <label class="dropzone" data-dropzone>
+                <input type="file" name="decoy" hidden />
+                <span class="dropzone-icon dropzone-icon-file" aria-hidden="true"></span>
+                <span class="dropzone-title">Drop decoy here</span>
+                <span class="dropzone-hint">or click to browse · optional</span>
+                <span class="dropzone-file" hidden></span>
+              </label>
+            </div>
+            <label class="field">
+              <span class="label">Decoy password</span>
+              <input type="password" name="decoy_password" placeholder="Must differ from real password" autocomplete="new-password" />
+            </label>
+          </details>
+          <div class="form-actions">
+            <button type="submit" class="cta">Hide file &amp; download video</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- REVEAL -->
+    <section class="panel" id="panel-reveal" role="tabpanel" hidden>
+      <div class="panel-card">
+        <div class="panel-card-head">
+          <h2>Reveal</h2>
+          <p>
+            Extract a secret hidden with <strong>vsteg</strong>.
+            Other tools (e.g. OpenPuff) are detected but cannot be unlocked here.
+          </p>
+        </div>
+        <form id="form-reveal" class="flow form-grid">
+          <div class="field">
+            <span class="label">Stego video</span>
+            <label class="dropzone" data-dropzone>
+              <input type="file" name="stego" accept="video/*,.mkv" required hidden />
+              <span class="dropzone-icon" aria-hidden="true"></span>
+              <span class="dropzone-title">Drop video here</span>
+              <span class="dropzone-hint">or click to browse</span>
+              <span class="dropzone-file" hidden></span>
+            </label>
+          </div>
+          <label class="field">
+            <span class="label">Password <em>real or decoy, if used</em></span>
+            <input type="password" name="password" placeholder="Leave blank if none" autocomplete="current-password" />
+          </label>
+          <input type="hidden" name="method" value="auto" />
+          <div class="form-actions">
+            <button type="submit" class="cta">Reveal &amp; download secret</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- CHECK -->
+    <section class="panel" id="panel-check" role="tabpanel" hidden>
+      <div class="workspace">
+        <aside class="howto">
+          <h2>How Check works</h2>
+          <p>
+            Check does <strong>not</strong> extract a secret. It runs a layered steganalysis
+            pipeline and scores how strongly the video looks like it contains hidden data.
+          </p>
+          <ol>
+            <li><strong>Signature scan</strong> — known stego markers (e.g. <code>VSTG</code>).</li>
+            <li><strong>Container structure</strong> — appended trailers after media.</li>
+            <li><strong>vsteg active probe</strong> — confirm vsteg append / LSB / DCT payloads.</li>
+            <li><strong>MP4 forensics</strong> — unreferenced <code>mdat</code> slack vs <code>stsz</code> totals (OpenPuff-style).</li>
+            <li><strong>FFmpeg / ffprobe</strong> — codec, streams, metadata consistency.</li>
+            <li><strong>LSB / DCT statistics</strong> — conservative generic heuristics.</li>
+          </ol>
+          <p class="howto-note">
+            Score guide: <strong>0–24</strong> clean · <strong>25–59</strong> suspicious · <strong>60–100</strong> likely-stego.
+            ffprobe notes with +0 weight are informational only.
+          </p>
+        </aside>
+
+        <div class="workspace-main">
+          <div class="panel-card">
+            <div class="panel-card-head">
+              <h2>Check</h2>
+              <p>Analyze a video for steganography signals.</p>
+            </div>
+            <form id="form-check" class="flow">
+              <div class="field">
+                <span class="label">Video to analyze</span>
+                <label class="dropzone dropzone-tall" data-dropzone>
+                  <input type="file" name="video" accept="video/*,.mkv" required hidden />
+                  <span class="dropzone-icon" aria-hidden="true"></span>
+                  <span class="dropzone-title">Drop video here</span>
+                  <span class="dropzone-hint">or click to browse</span>
+                  <span class="dropzone-file" hidden></span>
+                </label>
+              </div>
+              <button type="submit" class="cta">Check for hidden data</button>
+            </form>
+          </div>
+          <div id="detect-result" class="result report" hidden></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMPARE -->
+    <section class="panel" id="panel-compare" role="tabpanel" hidden>
+      <div class="workspace">
+        <aside class="howto">
+          <h2>How Compare works</h2>
+          <p>
+            Compare places two videos side by side using ffprobe attributes, then samples
+            frames to measure visual drift.
+          </p>
+          <ol>
+            <li><strong>Attributes</strong> — codec, resolution, bitrate, fps, duration, streams, metadata.</li>
+            <li><strong>Graphs</strong> — scalar metrics, stream counts, per-frame difference, luma histograms.</li>
+            <li><strong>Frame sampling</strong> — mean absolute difference on grayscale frames (when resolutions match).</li>
+          </ol>
+        </aside>
+
+        <div class="workspace-main">
+          <div class="panel-card">
+            <div class="panel-card-head">
+              <h2>Compare</h2>
+              <p>Diff two videos with attributes and charts.</p>
+            </div>
+            <form id="form-compare" class="flow form-grid">
+              <div class="field">
+                <span class="label">Video A</span>
+                <label class="dropzone" data-dropzone>
+                  <input type="file" name="video_a" accept="video/*,.mkv" required hidden />
+                  <span class="dropzone-icon" aria-hidden="true"></span>
+                  <span class="dropzone-title">Drop video A</span>
+                  <span class="dropzone-hint">or click to browse</span>
+                  <span class="dropzone-file" hidden></span>
+                </label>
+              </div>
+              <div class="field">
+                <span class="label">Video B</span>
+                <label class="dropzone" data-dropzone>
+                  <input type="file" name="video_b" accept="video/*,.mkv" required hidden />
+                  <span class="dropzone-icon" aria-hidden="true"></span>
+                  <span class="dropzone-title">Drop video B</span>
+                  <span class="dropzone-hint">or click to browse</span>
+                  <span class="dropzone-file" hidden></span>
+                </label>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="cta">Compare videos</button>
+              </div>
+            </form>
+          </div>
+          <div id="compare-result" class="result report" hidden></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

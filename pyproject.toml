@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vsteg"
+version = "0.1.0"
+description = "Video steganography toolkit: encode, decode, detect"
+requires-python = ">=3.10"
+dependencies = [
+  "cryptography>=42.0.0",
+  "numpy>=1.26.0",
+  "scipy>=1.11.0",
+  "reedsolo>=1.7.0",
+  "av>=12.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]
+web = ["fastapi>=0.110.0", "uvicorn[standard]>=0.27.0", "python-multipart>=0.0.9"]
+
+[project.scripts]
+vsteg = "vsteg.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["vsteg*"]
+
+[tool.setuptools.package-data]
+vsteg = ["web_static/*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
