@@ -2,6 +2,8 @@
 
 Encode, decode, and detect hidden data in video files.
 
+License: [MIT](LICENSE)
+
 ## Why this exists
 
 - **StegoForge** embeds in pixel LSBs then re-encodes with **lossy** H.264, which destroys the payload.
