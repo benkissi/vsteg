@@ -409,10 +409,14 @@ LSB refuses non-lossless codecs (vsteg LSB always ships FFV1).
 | 3 | `self_probe` | **Active** confirmation: decode append; parse LSB header on lossless; DCT sync + ECC + header |
 | 4 | `mp4_forensics` | ISO-BMFF atoms; `mdat` vs `stsz` slack; trailing bytes; slack entropy |
 | 5 | `ffmpeg_consistency` | Unusual codec/pix_fmt/size vs bitrate×duration/metadata |
-| 6 | `statistics` *(deep)* | Chi-square / sample-pair style LSB tests on sampled frames |
+| 6 | `statistics` *(deep)* | Chi-square, sample-pair, and **RS (Regular–Singular)** LSB tests on sampled frames |
 | 7 | `dct_stats` *(deep)* | Mid-band coefficient clustering near a \(\Delta\) grid |
+| 8 | `video_anomaly` *(deep)* | StegoForge-style **keyframe** DCT energy at coeffs `(3,4)/(4,3)`; z-score outliers |
+| 9 | `ml_ensemble` *(deep, optional)* | sklearn RandomForest over handcrafted features (`pip install -e ".[ml]"` + train script) |
 
-`--fast` / `deep=False` skips steps 6–7.
+`--fast` / `deep=False` skips steps 6–9.
+
+**StegoForge note:** their ONNX CNN is image/BOSSbase-trained; we intentionally do **not** ship it for video. Our ML path is a small RF on video-native features.
 
 ### 6.2 Scoring and verdicts
 
@@ -422,7 +426,7 @@ Each signal contributes a **weight** (0 = informational only).
 \text{raw\_score} = \min(100,\ \sum \text{weights})
 \]
 
-**Dampening:** if the *only* hits are soft statistical tests and `raw_score < 45`, cap score at **24** (avoids calling clean video “suspicious” from noisy LSB/DCT stats alone).
+**Dampening:** if there is no hard evidence (`signature` / `structure` / `ffmpeg` / `self_probe` / `mp4_forensics`) and `raw_score < 45`, cap score at **24** (soft stats + ML alone cannot mark clean H.264 “suspicious”).
 
 | Score | Verdict |
 |-------|---------|

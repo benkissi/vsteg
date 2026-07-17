@@ -10,11 +10,13 @@ from typing import Any
 from vsteg.detect import (
     dct_stats,
     ffmpeg_consistency,
+    ml_ensemble,
     mp4_forensics,
     self_probe,
     signatures,
     statistics,
     structure,
+    video_anomaly,
 )
 from vsteg.probe import probe
 
@@ -50,12 +52,29 @@ SIGNAL_META = {
         ),
     },
     "lsb_stats": {
-        "title": "LSB statistics",
-        "summary": "Samples frames and runs chi-square / sample-pair style tests for least-significant-bit embedding.",
+        "title": "LSB / RS statistics",
+        "summary": (
+            "Samples frames and runs chi-square, sample-pair, and Regular–Singular (RS) "
+            "tests for least-significant-bit embedding (StegoForge-style RS)."
+        ),
     },
     "dct_stats": {
         "title": "DCT mid-band analysis",
         "summary": "Looks for quantization patterns in mid-frequency DCT coefficients that can appear after robust embedding.",
+    },
+    "video_anomaly": {
+        "title": "Keyframe DCT anomaly",
+        "summary": (
+            "StegoForge-style I-frame scan: mid-band DCT energy at coefficients "
+            "(3,4)/(4,3), flagged when keyframe z-scores are extreme."
+        ),
+    },
+    "ml_stats": {
+        "title": "ML ensemble",
+        "summary": (
+            "Optional scikit-learn RandomForest over handcrafted video features "
+            "(chi/SPA/RS/DCT/keyframe/mdat slack). Install with pip install -e \".[ml]\"."
+        ),
     },
 }
 
@@ -96,13 +115,32 @@ CHECK_PIPELINE = [
     },
     {
         "id": "lsb_stats",
-        "title": "6. LSB statistical tests",
-        "body": "Sample frames and measure LSB-plane anomalies with chi-square and sample-pair heuristics.",
+        "title": "6. LSB / RS statistical tests",
+        "body": (
+            "Sample frames for chi-square, sample-pair, and Regular–Singular (RS) "
+            "LSB embedding estimates."
+        ),
     },
     {
         "id": "dct_stats",
-        "title": "7. DCT-domain checks",
+        "title": "7. DCT mid-band checks",
         "body": "Inspect mid-frequency coefficients for QIM-like clustering (best-effort; robust stego is stealthier).",
+    },
+    {
+        "id": "video_anomaly",
+        "title": "8. Keyframe DCT anomaly",
+        "body": (
+            "StegoForge-style keyframe scan of mid-band DCT energy; outliers across "
+            "I-frames raise suspicion."
+        ),
+    },
+    {
+        "id": "ml_stats",
+        "title": "9. ML ensemble",
+        "body": (
+            "Optional RandomForest over handcrafted features. Soft signal only — "
+            "cannot alone force a likely-stego verdict under dampening."
+        ),
     },
 ]
 
@@ -120,6 +158,8 @@ class DetectionReport:
     thresholds: dict = field(default_factory=dict)
     pipeline: list[dict] = field(default_factory=list)
     deep: bool = True
+    # Handcrafted / ML feature breakdown for the Check UI
+    stat_features: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -139,9 +179,26 @@ def detect(path: str | Path, deep: bool = True) -> DetectionReport:
     signals.extend(self_probe.analyze(path))
     signals.extend(mp4_forensics.analyze(path))
     signals.extend(ffmpeg_consistency.analyze(path, info=info))
+    feats: dict[str, float] = {}
+    mdat_slack_bytes = 0
+    ml_proba: float | None = None
     if deep:
-        signals.extend(statistics.analyze(path))
-        signals.extend(dct_stats.analyze(path))
+        lsb_signals = statistics.analyze(path)
+        dct_signals = dct_stats.analyze(path)
+        va_signals = video_anomaly.analyze(path)
+        signals.extend(lsb_signals)
+        signals.extend(dct_signals)
+        signals.extend(va_signals)
+        feats, mdat_slack_bytes = _features_from_signals(
+            lsb_signals, dct_signals, va_signals, path
+        )
+        ml_signals = ml_ensemble.analyze(path, features=feats)
+        signals.extend(ml_signals)
+        for s in ml_signals:
+            m = s.get("metrics") or {}
+            if "proba_stego" in m:
+                ml_proba = float(m["proba_stego"])
+                break
 
     enriched: list[dict] = []
     for s in signals:
@@ -158,13 +215,15 @@ def detect(path: str | Path, deep: bool = True) -> DetectionReport:
     # Informational (weight 0) findings do not affect the score
     raw_score = min(100, sum(int(s.get("weight", 0)) for s in enriched))
     scored_kinds = {s.get("signal") for s in enriched if int(s.get("weight", 0)) > 0}
+    soft_kinds = {"lsb_stats", "dct_stats", "video_anomaly", "ml_stats"}
     has_hard_evidence = bool(
         scored_kinds
         & {"signature", "structure", "ffmpeg", "self_probe", "mp4_forensics"}
     )
-    # Statistical-only hits are easy false positives on clean H.264 — require a
-    # higher bar before calling the file suspicious.
-    if not has_hard_evidence and raw_score < 45:
+    # Statistical / ML-only hits are easy false positives on clean H.264 — require
+    # a higher bar before calling the file suspicious.
+    only_soft = scored_kinds and scored_kinds.issubset(soft_kinds)
+    if (not has_hard_evidence or only_soft) and raw_score < 45 and not has_hard_evidence:
         score = min(raw_score, 24)
     else:
         score = raw_score
@@ -206,6 +265,11 @@ def detect(path: str | Path, deep: bool = True) -> DetectionReport:
         if info is not None
         else {"filename": path.name, "error": "probe unavailable"}
     )
+    stat_features = (
+        _stat_feature_panel(feats, mdat_slack_bytes, ml_proba)
+        if deep and feats
+        else []
+    )
 
     return DetectionReport(
         path=str(path),
@@ -223,7 +287,179 @@ def detect(path: str | Path, deep: bool = True) -> DetectionReport:
         },
         pipeline=CHECK_PIPELINE,
         deep=deep,
+        stat_features=stat_features,
     )
+
+
+def _features_from_signals(
+    lsb_signals: list[dict],
+    dct_signals: list[dict],
+    va_signals: list[dict],
+    path: Path,
+) -> tuple[dict[str, float], int]:
+    """Assemble ML features from analyzer metrics without a second full decode."""
+    feats = {name: 0.0 for name in ml_ensemble.FEATURE_NAMES}
+    for s in lsb_signals:
+        m = s.get("metrics") or {}
+        if "avg_chi" in m:
+            feats["avg_chi"] = float(m["avg_chi"])
+            feats["avg_spa"] = float(m["avg_spa"])
+            feats["avg_lsb"] = float(m["avg_lsb"])
+            feats["avg_rs"] = float(m["avg_rs"])
+            break
+    for s in dct_signals:
+        m = s.get("metrics") or {}
+        if "near" in m:
+            feats["dct_near"] = float(m["near"])
+            feats["dct_peakiness"] = float(m["peakiness"])
+            break
+    for s in va_signals:
+        m = s.get("metrics") or {}
+        if "zmax" in m:
+            feats["keyframe_zmax"] = float(m["zmax"])
+            break
+    slack_bytes = 0
+    try:
+        size = max(1, path.stat().st_size)
+        report = mp4_forensics.inspect_mp4(path.read_bytes())
+        slack_bytes = int(report.get("mdat_slack") or 0)
+        feats["mdat_slack_norm"] = min(1.0, max(0.0, slack_bytes / size))
+    except Exception:
+        pass
+    return feats, slack_bytes
+
+
+def _stat_feature_panel(
+    feats: dict[str, float],
+    mdat_slack_bytes: int,
+    ml_proba: float | None,
+) -> list[dict]:
+    """Human-readable breakdown of chi/SPA/RS/DCT/keyframe/mdat (+ ML)."""
+    rows: list[dict] = []
+
+    def add(
+        key: str,
+        name: str,
+        value: float,
+        display: str,
+        status: str,
+        note: str,
+    ) -> None:
+        rows.append(
+            {
+                "key": key,
+                "name": name,
+                "value": value,
+                "display": display,
+                "status": status,  # ok | watch | flag | info
+                "note": note,
+            }
+        )
+
+    chi = float(feats.get("avg_chi", 0.0))
+    add(
+        "chi",
+        "Chi-square (LSB)",
+        chi,
+        f"{chi:.3f}",
+        "flag" if chi >= statistics.CHI_THRESHOLD else "ok",
+        f"Threshold ≥ {statistics.CHI_THRESHOLD:.2f} (pair uniformity)",
+    )
+    spa = float(feats.get("avg_spa", 0.0))
+    add(
+        "spa",
+        "Sample-pair (SPA)",
+        spa,
+        f"{spa:.3f}",
+        "flag" if spa >= statistics.SPA_THRESHOLD else "ok",
+        f"Threshold ≥ {statistics.SPA_THRESHOLD:.2f} (embedding-rate estimate)",
+    )
+    rs = float(feats.get("avg_rs", 0.0))
+    add(
+        "rs",
+        "RS analysis",
+        rs,
+        f"{rs:.3f}",
+        "flag" if rs >= statistics.RS_FRACTION_THRESHOLD else "ok",
+        f"Threshold ≥ {statistics.RS_FRACTION_THRESHOLD:.2f} (payload fraction)",
+    )
+    lsb = float(feats.get("avg_lsb", 0.0))
+    lsb_delta = abs(lsb - 0.5)
+    add(
+        "lsb_ratio",
+        "LSB plane ratio",
+        lsb,
+        f"{lsb:.3f}",
+        "watch" if lsb_delta > statistics.LSB_RATIO_DELTA else "ok",
+        f"Natural ≈ 0.5 · watch if |Δ| > {statistics.LSB_RATIO_DELTA:.2f}",
+    )
+    near = float(feats.get("dct_near", 0.0))
+    add(
+        "dct_near",
+        "DCT near-QIM",
+        near,
+        f"{near:.3f}",
+        "flag" if near >= dct_stats.NEAR_THRESHOLD else "ok",
+        f"Threshold ≥ {dct_stats.NEAR_THRESHOLD:.2f} (mid-band clustering)",
+    )
+    peak = float(feats.get("dct_peakiness", 0.0))
+    add(
+        "dct_peakiness",
+        "DCT peakiness",
+        peak,
+        f"{peak:.3f}",
+        "flag" if peak >= dct_stats.PEAKINESS_THRESHOLD else "ok",
+        f"Threshold ≥ {dct_stats.PEAKINESS_THRESHOLD:.2f} (histogram peaks)",
+    )
+    zmax = float(feats.get("keyframe_zmax", 0.0))
+    add(
+        "keyframe",
+        "Keyframe DCT z-max",
+        zmax,
+        f"{zmax:.3f}",
+        "flag" if zmax >= video_anomaly.ZMAX_THRESHOLD else "ok",
+        f"Threshold ≥ {video_anomaly.ZMAX_THRESHOLD:.1f} (I-frame outlier)",
+    )
+    slack_norm = float(feats.get("mdat_slack_norm", 0.0))
+    if mdat_slack_bytes >= 64:
+        slack_status = "flag"
+    elif mdat_slack_bytes > 0:
+        slack_status = "watch"
+    else:
+        slack_status = "ok"
+    add(
+        "mdat_slack",
+        "MP4 mdat slack",
+        float(mdat_slack_bytes),
+        f"{mdat_slack_bytes} B (norm {slack_norm:.4f})",
+        slack_status,
+        "OpenPuff-like when unreferenced slack ≥ 64 bytes",
+    )
+    if ml_proba is not None:
+        if ml_proba >= 0.65:
+            ml_status = "flag"
+        elif ml_proba >= 0.45:
+            ml_status = "watch"
+        else:
+            ml_status = "ok"
+        add(
+            "ml_proba",
+            "ML ensemble P(stego)",
+            ml_proba,
+            f"{ml_proba:.3f}",
+            ml_status,
+            "RandomForest over the features above · soft signal only",
+        )
+    else:
+        add(
+            "ml_proba",
+            "ML ensemble P(stego)",
+            0.0,
+            "n/a",
+            "info",
+            'Install optional ML: pip install -e ".[ml]" && train model',
+        )
+    return rows
 
 
 def _severity(weight: int) -> str:
@@ -245,6 +481,8 @@ def _category_breakdown(signals: list[dict], deep: bool) -> list[dict]:
         "ffmpeg",
         "lsb_stats",
         "dct_stats",
+        "video_anomaly",
+        "ml_stats",
     ]
     by_kind: dict[str, list[dict]] = {k: [] for k in order}
     for s in signals:
@@ -252,17 +490,18 @@ def _category_breakdown(signals: list[dict], deep: bool) -> list[dict]:
         by_kind.setdefault(kind, []).append(s)
 
     out: list[dict] = []
+    soft = {"lsb_stats", "dct_stats", "video_anomaly", "ml_stats"}
     for kind in order:
         meta = SIGNAL_META.get(kind, {"title": kind, "summary": ""})
         items = by_kind.get(kind, [])
-        skipped = kind in {"lsb_stats", "dct_stats"} and not deep
+        skipped = kind in soft and not deep
         weight = sum(int(i.get("weight", 0)) for i in items)
+        scored = [i for i in items if int(i.get("weight", 0)) > 0]
+        info_only = [i for i in items if int(i.get("weight", 0)) <= 0]
         if skipped:
             status = "skipped"
             detail = "Not run (fast mode)."
-        scored = [i for i in items if int(i.get("weight", 0)) > 0]
-        info_only = [i for i in items if int(i.get("weight", 0)) <= 0]
-        if weight > 0:
+        elif weight > 0:
             status = "triggered"
             detail = (
                 f"{len(scored)} scored finding(s) (+{weight}); "
@@ -326,6 +565,15 @@ def format_text(report: DetectionReport) -> str:
         lines.append(f"  audio_streams: {media['audio_streams']}")
     if media.get("subtitle_streams"):
         lines.append(f"  subtitle_streams: {media['subtitle_streams']}")
+
+    if report.stat_features:
+        lines.append("")
+        lines.append("statistical / ML features:")
+        for row in report.stat_features:
+            lines.append(
+                f"  - [{row.get('status')}] {row.get('name')}: {row.get('display')} "
+                f"— {row.get('note')}"
+            )
 
     lines.append("")
     lines.append("categories:")

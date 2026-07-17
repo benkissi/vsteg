@@ -22,17 +22,15 @@ def analyze(path: str | Path, sample_frames: int = 4, delta_guess: float = 8.0) 
     path = Path(path)
     signals: list[dict] = []
     try:
-        coeffs = _collect_mid_coeffs(path, sample_frames)
+        metrics = compute_metrics(path, sample_frames, delta_guess)
     except Exception as exc:
         return [{"signal": "dct_stats", "label": f"DCT sample failed: {exc}", "weight": 0}]
 
-    if coeffs.size < 100:
+    if metrics.get("coeff_count", 0) < 100:
         return signals
 
-    q = np.round(coeffs / delta_guess)
-    residual = np.abs(coeffs - q * delta_guess)
-    near = float(np.mean(residual < delta_guess * 0.15))
-    hist_score = _peakiness(coeffs, delta_guess)
+    near = float(metrics["near"])
+    hist_score = float(metrics["peakiness"])
 
     signals.append(
         {
@@ -42,6 +40,7 @@ def analyze(path: str | Path, sample_frames: int = 4, delta_guess: float = 8.0) 
                 f"peakiness={hist_score:.3f} (Δ={delta_guess})"
             ),
             "weight": 0,
+            "metrics": metrics,
         }
     )
 
@@ -71,6 +70,27 @@ def analyze(path: str | Path, sample_frames: int = 4, delta_guess: float = 8.0) 
         )
 
     return signals
+
+
+def compute_metrics(
+    path: str | Path,
+    sample_frames: int = 4,
+    delta_guess: float = 8.0,
+) -> dict:
+    """Return mid-band DCT metrics for ML feature extraction."""
+    coeffs = _collect_mid_coeffs(Path(path), sample_frames)
+    if coeffs.size < 100:
+        return {"coeff_count": int(coeffs.size), "near": 0.0, "peakiness": 0.0}
+    q = np.round(coeffs / delta_guess)
+    residual = np.abs(coeffs - q * delta_guess)
+    near = float(np.mean(residual < delta_guess * 0.15))
+    hist_score = _peakiness(coeffs, delta_guess)
+    return {
+        "coeff_count": int(coeffs.size),
+        "near": near,
+        "peakiness": hist_score,
+        "delta": float(delta_guess),
+    }
 
 
 def _collect_mid_coeffs(path: Path, n_frames: int) -> np.ndarray:

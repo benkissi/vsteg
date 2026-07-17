@@ -300,6 +300,34 @@ function renderDetectReport(data) {
         .join("")
     : `<li><p class="cat-detail">No individual signals fired.</p></li>`;
 
+  const statFeatures = data.stat_features || [];
+  const featuresHtml = statFeatures.length
+    ? `
+      <div class="report-section">
+        <h3>Statistical / ML feature checks</h3>
+        <p class="finding-meta">
+          Handcrafted features used by deep Check (chi · SPA · RS · DCT · keyframe · mdat slack)
+          and the optional ML ensemble.
+        </p>
+        <div class="feature-table" role="table" aria-label="Statistical feature results">
+          <div class="feature-row feature-head" role="row">
+            <span>Check</span><span>Result</span><span>Status</span><span>Notes</span>
+          </div>
+          ${statFeatures
+            .map(
+              (f) => `
+            <div class="feature-row status-${escapeHtml(f.status || "info")}" role="row">
+              <span class="feature-name">${escapeHtml(f.name || f.key)}</span>
+              <span class="feature-value">${escapeHtml(f.display)}</span>
+              <span class="feature-status">${escapeHtml(f.status || "info")}</span>
+              <span class="feature-note">${escapeHtml(f.note || "")}</span>
+            </div>`
+            )
+            .join("")}
+        </div>
+      </div>`
+    : "";
+
   detectResult.innerHTML = `
     <div class="report-head">
       <div>
@@ -325,6 +353,8 @@ function renderDetectReport(data) {
       <h3>Media probed (ffprobe)</h3>
       <dl class="media-grid">${mediaRows || "<div><dd>Unavailable</dd></div>"}</dl>
     </div>
+
+    ${featuresHtml}
 
     <div class="report-columns">
       <div class="report-section">

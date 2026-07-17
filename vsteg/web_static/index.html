@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=mlfeat3" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -155,7 +155,10 @@
             <li><strong>vsteg active probe</strong> — confirm vsteg append / LSB / DCT payloads.</li>
             <li><strong>MP4 forensics</strong> — unreferenced <code>mdat</code> slack vs <code>stsz</code> totals (OpenPuff-style).</li>
             <li><strong>FFmpeg / ffprobe</strong> — codec, streams, metadata consistency.</li>
-            <li><strong>LSB / DCT statistics</strong> — conservative generic heuristics.</li>
+            <li><strong>LSB / RS statistics</strong> — chi-square, sample-pair, Regular–Singular analysis.</li>
+            <li><strong>DCT mid-band</strong> — QIM-like coefficient clustering.</li>
+            <li><strong>Keyframe DCT anomaly</strong> — StegoForge-style I-frame mid-band z-scores.</li>
+            <li><strong>ML ensemble</strong> — optional RandomForest over those features (<code>pip install -e ".[ml]"</code>).</li>
           </ol>
           <p class="howto-note">
             Score guide: <strong>0–24</strong> clean · <strong>25–59</strong> suspicious · <strong>60–100</strong> likely-stego.
@@ -242,6 +245,6 @@
     </section>
   </main>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=mlfeat3"></script>
 </body>
 </html>

@@ -20,6 +20,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0"]
 web = ["fastapi>=0.110.0", "uvicorn[standard]>=0.27.0", "python-multipart>=0.0.9"]
+ml = ["scikit-learn>=1.3.0", "joblib>=1.3.0"]
 
 [project.scripts]
 vsteg = "vsteg.cli:main"
@@ -28,7 +29,7 @@ vsteg = "vsteg.cli:main"
 include = ["vsteg*"]
 
 [tool.setuptools.package-data]
-vsteg = ["web_static/*"]
+vsteg = ["web_static/*", "detect/models/*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

@@ -17,6 +17,9 @@ License: [MIT](LICENSE)
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev,web]"
+# optional ML steganalysis ensemble (sklearn RandomForest)
+pip install -e ".[ml]"
+python scripts/train_ml_detector.py   # once, to build the small model
 # needs ffmpeg/ffprobe on PATH
 ```
 
@@ -55,6 +58,10 @@ python -m vsteg detect -i suspect.mp4 --json
 python -m vsteg compare -a carrier.mp4 -b out.mp4
 python -m vsteg compare -a carrier.mp4 -b out.mp4 --html output/compare.html
 ```
+
+## Detection notes (vs StegoForge)
+
+Deep **Check** includes StegoForge-inspired stats: chi-square, **RS analysis**, keyframe DCT anomaly, plus an optional sklearn ensemble on handcrafted video features. We do **not** ship StegoForge’s image ONNX CNN (trained on still images / BOSSbase) — that model is the wrong domain for H.264 video.
 
 ## Methods at a glance
 
