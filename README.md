@@ -2,7 +2,7 @@
 
 Encode, decode, and detect hidden data in video files.
 
-License: [MIT](LICENSE)
+License: [MIT](LICENSE) with an **academic attribution** requirement — if you use this project in research or scholarly writing, you must cite it (see [Citation](#citation)).
 
 ## Why this exists
 
@@ -89,3 +89,26 @@ Deep **Check** includes StegoForge-inspired stats: chi-square, **RS analysis**, 
 ```bash
 pytest -q
 ```
+
+## Citation
+
+If you use **vsteg** in academic research, coursework, theses, or publications, please cite the project.
+
+**APA (example):**
+
+> Kissi, B., et al. (2026). *vsteg: A video steganography toolkit for encode, decode, and detection* [Computer software]. https://github.com/benkissi/vsteg
+
+**BibTeX (example):**
+
+```bibtex
+@software{kissi2026vsteg,
+  author       = {Kissi, Ben and others},
+  title        = {{vsteg}: A Video Steganography Toolkit for Encode, Decode, and Detection},
+  year         = {2026},
+  url          = {https://github.com/benkissi/vsteg},
+  license      = {MIT},
+  note         = {Academic use requires citation of this project}
+}
+```
+
+**Short in-text form:** (Kissi et al., 2026)

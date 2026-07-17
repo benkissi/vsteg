@@ -401,6 +401,56 @@ LSB refuses non-lossless codecs (vsteg LSB always ships FFV1).
 **CLI:** `vsteg detect`  
 **Web:** Check tab → `POST /api/detect`
 
+### 6.0 Analysis domains — coverage map
+
+Video steganalysis is often grouped into three domains. vsteg covers them **unevenly**: strong on spatial + some compressed-domain cues; weak on true temporal analysis. Container / signature checks sit outside this triad but are first-class in our pipeline.
+
+| Domain | Target | Coverage | What vsteg does | What we do **not** do |
+|--------|--------|----------|-----------------|------------------------|
+| **Spatial** | Per-frame pixels / LSB | **High** | Chi-square, RS, SPA, LSB ratio, histogram-style DCT peakiness on sampled frames (`statistics`, `dct_stats`) | Full-frame heatmaps, PRNU / sensor fingerprint, colour-channel forensics beyond grayscale LSB |
+| **Temporal** | Frame-to-frame flow | **Low** | Keyframe DCT z-score outliers only (`video_anomaly`) — a weak temporal cue on I-frames | Optical flow, flicker, motion consistency, consecutive-frame differencing, temporal noise models |
+| **Compressed** | Codec data (H.264/HEVC) | **Medium** | Mid-band DCT/QIM clustering (`dct_stats`); keyframe mid-coeff energy; bitrate/codec/metadata consistency (`ffmpeg_consistency`); Method C itself embeds in DCT/QIM | Motion-vector inspection, quantization-parameter traces, prediction-residual analysis, full CABAC/bitstream parsers |
+| **Other (vsteg-specific)** | Container / signatures | **High** | `VSTG` magic, append trailers, active self-probe, MP4 `mdat` vs `stsz` slack (OpenPuff-style), optional RF over the features above | Decoding foreign proprietary formats (e.g. OpenPuff payloads) |
+
+#### Spatial domain (what investigators look for)
+
+Treats video as a sequence of images. Looks for pixel / LSB / histogram anomalies.
+
+| Technique | In vsteg? | Module / notes |
+|-----------|-----------|----------------|
+| Chi-square analysis | Yes | `statistics` |
+| RS analysis | Yes | `statistics` (StegoForge-style Regular–Singular) |
+| Sample Pair Analysis (SPA) | Yes | `statistics` (simplified SPA heuristic) |
+| Histogram abnormalities | Partial | Via LSB ratio + DCT residual peakiness |
+| LSB manipulation detection | Yes | Core of spatial stats; best on **lossless** embeds |
+| Limitation | Acknowledged | Lossy H.264 often destroys fragile pixel LSBs → soft scores are dampened |
+
+#### Temporal domain
+
+Looks for unnatural change over time (motion / flicker / keyframe behaviour).
+
+| Technique | In vsteg? | Notes |
+|-----------|-----------|-------|
+| Abnormal keyframe behaviour | Partial | I-frame DCT energy z-max (`video_anomaly`) |
+| Frame-to-frame differences | No | — |
+| Optical flow / motion consistency | No | — |
+| Temporal noise / flicker | No | — |
+| Limitation | Acknowledged | Camera motion and edits also create temporal anomalies |
+
+#### Compressed domain
+
+Looks inside codec mathematics rather than visible pixels.
+
+| Technique | In vsteg? | Notes |
+|-----------|-----------|-------|
+| Unusual DCT coefficient distributions | Yes (partial) | Mid-band near-QIM + peakiness; keyframe `(3,4)/(4,3)` energy |
+| Modified motion vectors | No | — |
+| Abnormal quantization patterns | No (direct) | Only indirect via DCT clustering heuristics |
+| Unexpected bitrate / codec inconsistencies | Yes (partial) | `ffmpeg_consistency` |
+| Limitation | Acknowledged | Full bitstream forensics is heavier; we stay at decoded-frame DCT + container/probe level |
+
+**Practical takeaway for coursework:** when presenting domains, say vsteg is **spatial-first**, with **compressed-domain DCT support** for Method C / QIM-style embeds, and only a **light temporal keyframe check**. Signature + MP4 container forensics are our strongest detectors for append / OpenPuff-like cases.
+
 ### 6.1 Pipeline (in order)
 
 | Step | Module | What it looks for |
