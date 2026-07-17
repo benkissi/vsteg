@@ -25,3 +25,14 @@ output/
 *.mp4
 *.mkv
 !tests/**/*.mp4
+
+# Training data from external tools (large / private)
+data/tools/*
+!data/tools/.gitkeep
+
+# Trained models (regenerate with scripts/train_ml_detector.py)
+models/*
+!models/.gitkeep
+!models/runs/
+models/runs/*
+!models/runs/.gitkeep

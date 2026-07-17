@@ -19,9 +19,12 @@ source .venv/bin/activate
 pip install -e ".[dev,web]"
 # optional ML steganalysis ensemble (sklearn RandomForest)
 pip install -e ".[ml]"
-python scripts/train_ml_detector.py   # once, to build the small model
+# put tool pairs in data/tools/<name>/original-N.mp4 + stego-N.mp4 (+ optional target-N)
+python scripts/train_ml_detector.py   # → models/runs/<timestamp>.joblib + models/latest-model
 # needs ffmpeg/ffprobe on PATH
 ```
+
+See [`data/README.md`](data/README.md) for the training data layout.
 
 ## Web UI (beginner-friendly)
 

@@ -25,7 +25,9 @@ FEATURE_NAMES = [
     "mdat_slack_norm",
 ]
 
-MODEL_PATH = Path(__file__).resolve().parent / "models" / "video_stego_rf.joblib"
+# Project-root models/latest-model (written by scripts/train_ml_detector.py)
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+MODEL_PATH = _REPO_ROOT / "models" / "latest-model"
 MAX_ML_WEIGHT = 20
 
 
@@ -66,8 +68,8 @@ def analyze(
             {
                 "signal": "ml_stats",
                 "label": (
-                    f"ML ensemble skipped (model missing at {MODEL_PATH.name}; "
-                    "run scripts/train_ml_detector.py)"
+                    "ML ensemble skipped (models/latest-model missing; "
+                    "add data/tools pairs then run scripts/train_ml_detector.py)"
                 ),
                 "weight": 0,
                 "metrics": feats,

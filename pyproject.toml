@@ -29,7 +29,7 @@ vsteg = "vsteg.cli:main"
 include = ["vsteg*"]
 
 [tool.setuptools.package-data]
-vsteg = ["web_static/*", "detect/models/*"]
+vsteg = ["web_static/*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

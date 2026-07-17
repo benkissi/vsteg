@@ -79,6 +79,7 @@ This document explains **what** the system does, **why** design choices were mad
 | Probe | **ffprobe** (CLI) / PyAV | Codec, fps, frames, bitrate, tags |
 | Numerics | `numpy`, `scipy.fft` | LSB planes, 2-D DCT/IDCT |
 | ECC | `reedsolo` | RS(255,191) for Method C |
+| ML (optional) | **scikit-learn** RandomForest + **joblib** | Handcrafted-feature steganalysis (`.[ml]`) — not PyTorch |
 | Web | FastAPI + uvicorn + multipart | Upload/encode/decode/detect/compare UI |
 | Charts | Chart.js (CDN) | Compare graphs in browser / HTML export |
 
@@ -417,6 +418,57 @@ LSB refuses non-lossless codecs (vsteg LSB always ships FFV1).
 `--fast` / `deep=False` skips steps 6–9.
 
 **StegoForge note:** their ONNX CNN is image/BOSSbase-trained; we intentionally do **not** ship it for video. Our ML path is a small RF on video-native features.
+
+### 6.1.1 ML training specifics
+
+| Item | Choice |
+|------|--------|
+| Framework | **scikit-learn** (+ **joblib** for serialize/load) — *not* PyTorch / TensorFlow / ONNX |
+| Algorithm | `sklearn.ensemble.RandomForestClassifier` |
+| Hyperparameters | `n_estimators=64`, `max_depth=6`, `random_state=42`, `class_weight="balanced"` |
+| Task | Binary classification: **clean (0)** vs **stego (1)** |
+| Input | Fixed **8 handcrafted features** (not raw pixels / not a CNN) |
+| Script | `scripts/train_ml_detector.py` |
+| Optional dep | `pip install -e ".[ml]"` |
+
+**Feature vector** (same order at train and inference):
+
+| Feature | Source |
+|---------|--------|
+| `avg_chi` | Chi-square LSB pair uniformity |
+| `avg_spa` | Sample-pair embedding-rate estimate |
+| `avg_lsb` | Mean LSB plane ratio |
+| `avg_rs` | Regular–Singular payload fraction |
+| `dct_near` | Mid-band near-QIM clustering |
+| `dct_peakiness` | Mid-band histogram peakiness |
+| `keyframe_zmax` | StegoForge-style I-frame DCT z-score |
+| `mdat_slack_norm` | Unreferenced `mdat` slack / file size |
+
+**Training data layout** (`data/`):
+
+```
+data/
+  carrier-sample.mp4          # optional — vsteg synthetic covers
+  payload-sample.txt          # optional — secret for synthetics
+  tools/
+    <tool>/                   # e.g. openpuff/
+      original-N.mp4          # label 0 (clean)
+      stego-N.mp4             # label 1 (stego)
+      target-N.txt            # optional payload metadata (not used as a feature)
+```
+
+- Tool pairs are discovered automatically under `data/tools/*`.
+- By default the trainer also adds a few **vsteg synthetic** samples (append / LSB / DCT) from `carrier-sample` + `payload-sample` (disable with `--no-synthetic`).
+- This is a **small class/demo set**, not a large public corpus (contrast StegoForge’s BOSSbase image CNN).
+
+**Artifacts:**
+
+| Path | Role |
+|------|------|
+| `models/runs/<UTC-timestamp>.joblib` | Archived training run |
+| `models/latest-model` | Active model loaded by Check (`ml_ensemble.py`) — overwritten each train |
+
+**Inference:** deep Check extracts the same 8 features → `predict_proba` → `P(stego)`. Soft weights only (capped); alone cannot force `likely-stego` under dampening.
 
 ### 6.2 Scoring and verdicts
 
