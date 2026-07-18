@@ -92,13 +92,13 @@ pytest -q
 
 ## Team
 
-- Benjamin Frempong Kissi — PG4003625
-- Courage Kwesi Apaw — PG3994625
-- Providence Annor Asemah — PG3994225
-- Anthony Mensah-Boateng — PG4005825
-- Ernest Kojo Adomako — PG3989925
-- Prince Okyere Acheampong — PG3988725
-- Osafo Simon Yeboah — PG4009425
+- Benjamin Frempong Kissi
+- Courage Kwesi Apaw
+- Providence Annor Asemah
+- Anthony Mensah-Boateng
+- Ernest Kojo Adomako
+- Prince Okyere Acheampong
+- Osafo Simon Yeboah
 
 ## Citation
 
