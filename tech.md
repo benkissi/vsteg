@@ -449,7 +449,7 @@ Looks inside codec mathematics rather than visible pixels.
 | Unexpected bitrate / codec inconsistencies | Yes (partial) | `ffmpeg_consistency` |
 | Limitation | Acknowledged | Full bitstream forensics is heavier; we stay at decoded-frame DCT + container/probe level |
 
-**Practical takeaway for coursework:** when presenting domains, say vsteg is **spatial-first**, with **compressed-domain DCT support** for Method C / QIM-style embeds, and only a **light temporal keyframe check**. Signature + MP4 container forensics are our strongest detectors for append / OpenPuff-like cases.
+**Our stance on domain coverage:** vsteg is **spatial-first**, with **compressed-domain DCT support** for Method C / QIM-style embeds, and only a **light temporal keyframe check**. Signature and MP4 container forensics are our strongest detectors for append and OpenPuff-like cases.
 
 ### 6.1 Pipeline (in order)
 
@@ -768,7 +768,3 @@ See **§6.0** for the full map. Short form: **spatial = high**, **compressed = m
 | **mdat slack** | Bytes in `mdat` not accounted for by `stsz` (OpenPuff-like) |
 | **Decoy** | Secondary payload unlocked by a different password |
 | **Plausible deniability** | Ability to reveal a convincing fake secret under coercion |
-
----
-
-*Generated for coursework from the `vsteg` implementation. If code and this document disagree, trust the source and update this file.*
