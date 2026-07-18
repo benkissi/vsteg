@@ -90,6 +90,16 @@ Deep **Check** includes StegoForge-inspired stats: chi-square, **RS analysis**, 
 pytest -q
 ```
 
+## Team
+
+- Benjamin Frempong Kissi — PG4003625
+- Courage Kwesi Apaw — PG3994625
+- Providence Annor Asemah — PG3994225
+- Anthony Mensah-Boateng — PG4005825
+- Ernest Kojo Adomako — PG3989925
+- Prince Okyere Acheampong — PG3988725
+- Osafo Simon Yeboah — PG4009425
+
 ## Citation
 
 If you use **vsteg** in academic research, coursework, theses, or publications, please cite the project.
