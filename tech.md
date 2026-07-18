@@ -705,7 +705,55 @@ pytest -q
 
 ---
 
-## 14. Glossary
+## 14. Current limitations
+
+Honest scope boundaries for demos, marking, and future work.
+
+### Encode / decode
+
+| Limitation | Detail |
+|------------|--------|
+| **Format lock-in** | Reveal only extracts **vsteg** `VSTG` payloads. Foreign tools (e.g. OpenPuff) cannot be decoded here. |
+| **Append is fragile** | Trailer survives playback but is stripped by remux / re-encode / many platform uploads. |
+| **LSB needs lossless** | Method B outputs FFV1/MKV; lossy H.264 round-trips destroy pixel LSBs (StegoForge failure mode). |
+| **DCT capacity is small** | Method C is robust but typically KB–~1 MiB (`--max-robust`), not multi-GB. |
+| **Decoy ≠ invisibility** | Dual passwords help plausible deniability; two containers remain a forensic signal. |
+
+### Detection / forensics
+
+| Limitation | Detail |
+|------------|--------|
+| **Detect ≠ extract** | Check/Compare can flag stego-like footprints without recovering the secret. |
+| **OpenPuff** | We can flag OpenPuff-*like* `mdat` slack; we cannot decrypt OpenPuff’s proprietary multi-password scheme. |
+| **Temporal analysis is thin** | No optical flow, flicker, or general frame-to-frame motion forensics — only keyframe DCT z-scores. |
+| **Compressed-domain depth** | No motion-vector / QP / prediction-residual bitstream parsers; DCT stats are on decoded frames. |
+| **Statistical false positives** | Chi/SPA/RS/DCT/ML can fire on clean H.264; soft scores are dampened and alone cannot force `likely-stego`. |
+| **Clean ≠ proof of innocence** | A clean verdict is not a mathematical guarantee that nothing is hidden. |
+
+### ML ensemble
+
+| Limitation | Detail |
+|------------|--------|
+| **Tiny training set** | Built from `data/tools/*` pairs + optional vsteg synthetics — class/demo scale, not BOSSbase. |
+| **Handcrafted features only** | RandomForest on 8 stats; not a deep CNN / PyTorch model. |
+| **Soft signal** | `P(stego)` is capped in scoring; missing `models/latest-model` skips ML gracefully. |
+| **No epochs** | Tree ensembles train in one fit; epoch-style training does not apply. |
+
+### Product / ops
+
+| Limitation | Detail |
+|------------|--------|
+| **Local tooling** | Needs `ffmpeg`/`ffprobe` on `PATH`; web UI is local (no cloud sync). |
+| **Optional ML deps** | `pip install -e ".[ml]"` + train script required for the ensemble. |
+| **Large media gitignored** | `data/tools/*` and `models/*` are local; collaborators must supply their own pairs / retrain. |
+
+### Domain coverage (summary)
+
+See **§6.0** for the full map. Short form: **spatial = high**, **compressed = medium**, **temporal = low**, plus strong **container/signature** checks outside the classic triad.
+
+---
+
+## 15. Glossary
 
 | Term | Meaning |
 |------|---------|
