@@ -111,6 +111,21 @@ def _get_y_plane(frame: av.VideoFrame) -> np.ndarray:
     return y, yuv
 
 
+def _copy_plane(src, dst) -> None:
+    """Copy a video plane accounting for linesize padding (PyAV/FFmpeg stride).
+
+    ``bytes(src)`` can be larger than ``dst`` when the decoder pads rows
+    (common on Linux/WSL). Copy only the active ``width × height`` region.
+    """
+    src_view = np.frombuffer(src, dtype=np.uint8).reshape(src.height, src.line_size)
+    dst_view = np.frombuffer(dst, dtype=np.uint8).reshape(dst.height, dst.line_size)
+    w = min(src.width, dst.width)
+    h = min(src.height, dst.height)
+    dst_view[:h, :w] = src_view[:h, :w]
+    if dst.line_size > w:
+        dst_view[:h, w:] = 0
+
+
 def _frame_from_yuv420(y: np.ndarray, template: av.VideoFrame) -> av.VideoFrame:
     """Build a yuv420p frame with modified Y, copying UV from template."""
     base = template.reformat(format="yuv420p")
@@ -122,12 +137,12 @@ def _frame_from_yuv420(y: np.ndarray, template: av.VideoFrame) -> av.VideoFrame:
         y_plane.height, y_plane.line_size
     )
     y_buf[:, : base.width] = np.clip(y, 0, 255).astype(np.uint8)
+    if y_plane.line_size > base.width:
+        y_buf[:, base.width :] = 0
 
-    # Copy U and V from template
+    # Copy U and V from template (stride-safe; never bytes(src) → update)
     for i in (1, 2):
-        src = base.planes[i]
-        dst = new.planes[i]
-        dst.update(bytes(src))
+        _copy_plane(base.planes[i], new.planes[i])
 
     new.pts = template.pts
     new.time_base = template.time_base
